@@ -2,36 +2,44 @@ import boto3
 import json
 import os
 
-# AWS Servis istemcilerini hazırlıyoruz
-# Not: LocalStack ortamında olduğumuz için endpoint_url belirtiyoruz
-s3 = boto3.client('s3', endpoint_url="http://127.0.0.1:4566")
-dynamodb = boto3.resource('dynamodb', endpoint_url="http://127.0.0.1:4566")
-sns = boto3.client('sns', endpoint_url="http://127.0.0.1:4566")
+# LocalStack'in Lambda içinde sunduğu özel hostname'i alıyoruz
+# Eğer bulamazsa (yerel testlerde) 127.0.0.1'e döner
+localstack_host = os.environ.get('LOCALSTACK_HOSTNAME', '127.0.0.1')
+endpoint_url = f"http://{localstack_host}:4566"
 
+print(f"Bağlanılan Endpoint: {endpoint_url}")
+
+# Servisleri bu dinamik URL ile başlatıyoruz
+s3 = boto3.client('s3', endpoint_url=endpoint_url)
+dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url)
+sns = boto3.client('sns', endpoint_url=endpoint_url)
 
 def handler(event, context):
-    # 1. Event içinden S3 bilgilerini çıkar (Hangi bucket, hangi dosya?)
-    bucket_name = event['Records'][0]['s3']['bucket']['name']
-    file_key = event['Records'][0]['s3']['object']['key']
+    try:
+        # 1. Event içinden S3 bilgilerini çıkar
+        bucket_name = event['Records'][0]['s3']['bucket']['name']
+        file_key = event['Records'][0]['s3']['object']['key']
+        event_time = event['Records'][0]['eventTime']
 
-    print(f"Yeni resim algılandı: {file_key} (Bucket: {bucket_name})")
+        print(f"İşleniyor: {file_key} (Bucket: {bucket_name})")
 
-    # 2. DynamoDB'ye kaydet (Metadata)
-    table = dynamodb.Table('ImageMetadata')
-    table.put_item(
-        Item={
-            'ImageId': file_key,
-            'Bucket': bucket_name,
-            'Status': 'PROCESSED',
-            'EventTime': event['Records'][0]['eventTime']
+        # 2. DynamoDB'ye kaydet
+        table = dynamodb.Table('ImageMetadata')
+        table.put_item(
+            Item={
+                'ImageId': file_key,
+                'Bucket': bucket_name,
+                'Status': 'PROCESSED',
+                'EventTime': event_time
+            }
+        )
+
+        print(f"Başarıyla kaydedildi: {file_key}")
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps(f'{file_key} başarıyla işlendi!')
         }
-    )
-
-    # 3. SNS ile Bildirim Gönder (Basit bir log mesajı gibi)
-    # SNS ARN'sini Terraform'dan alacağız ama şimdilik log basalım
-    print(f"DynamoDB kaydı başarılı: {file_key}")
-
-    return {
-        'statusCode': 200,
-        'body': json.dumps('İşlem Başarılı!')
-    }
+    except Exception as e:
+        print(f"HATA OLUŞTU: {str(e)}")
+        raise e
