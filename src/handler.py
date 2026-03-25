@@ -1,43 +1,47 @@
 import json
 import boto3
-import os
+import urllib.parse
 
-# LocalStack için endpoint ayarı (Lambda içinde genellikle gerekmez ama debug için iyidir)
 s3 = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb')
 
 
 def handler(event, context):
-    # 1. Olayı yakala (S3'ten gelen veri)
-    bucket_name = event['Records'][0]['s3']['bucket']['name']
-    file_key = event['Records'][0]['s3']['object']['key']
+    allowed_extensions = ['.jpg', '.jpeg', '.png']
 
-    print(f"🚀 Yeni dosya algılandı: {file_key} (Bucket: {bucket_name})")
+    for record in event['Records']:
+        try:
+            sqs_body = json.loads(record['body'])
+            if 'Records' not in sqs_body: continue
 
-    try:
-        # 2. Dosya bilgilerini al (Metadata)
-        response = s3.head_object(Bucket=bucket_name, Key=file_key)
-        file_size = response['ContentLength']
-        file_type = response['ContentType']
+            s3_event = sqs_body['Records'][0]
+            bucket_name = s3_event['s3']['bucket']['name']
+            file_key = urllib.parse.unquote_plus(s3_event['s3']['object']['key'])
 
-        # 3. DynamoDB'ye kaydet
-        table = dynamodb.Table('ImageMetadata')
-        table.put_item(
-            Item={
-                'ImageID': file_key,
-                'Size': file_size,
-                'Type': file_type,
-                'Status': 'PROCESSED'
-            }
-        )
+            # GÜVENLİK KONTROLÜ: Uzantı kontrolü
+            extension = "." + file_key.split('.')[-1].lower()
 
-        print(f"✅ {file_key} başarıyla işlendi ve DB'ye kaydedildi. Boyut: {file_size} bytes")
+            if extension not in allowed_extensions:
+                print(f"⚠️ GÜVENLİK UYARISI: Geçersiz dosya tipi ({extension}). İşlem iptal edildi.")
+                status = "REJECTED_INVALID_TYPE"
+            else:
+                print(f"🚀 İşleniyor: {file_key}")
+                status = "PROCESSED_SUCCESSFULLY"
 
-        return {
-            'statusCode': 200,
-            'body': json.dumps('İşlem Başarılı!')
-        }
+            # DynamoDB Kaydı
+            table = dynamodb.Table('ImageMetadata')
+            table.put_item(
+                Item={
+                    'ImageID': file_key,
+                    'Status': status,
+                    'Extension': extension,
+                    'Infrastructure': 'Enterprise-SQS-Lambda',
+                    'Timestamp': s3_event['eventTime']
+                }
+            )
 
-    except Exception as e:
-        print(f"❌ HATA: {str(e)}")
-        raise e
+        except Exception as e:
+            print(f"❌ Hata: {str(e)}")
+            raise e
+
+    return {'statusCode': 200, 'body': 'Pipeline Completed'}

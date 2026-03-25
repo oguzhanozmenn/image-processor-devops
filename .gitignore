@@ -1,5 +1,6 @@
 .terraform/
 *.tfstate
 *.tfstate.backup
-.idea/
+infra/lambda_function_payload.zip
 __pycache__/
+.DS_Store

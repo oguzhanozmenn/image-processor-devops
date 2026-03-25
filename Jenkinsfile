@@ -43,12 +43,16 @@ pipeline {
             }
         }
 
-        stage('🔍 Verify Database') {
+       stage('🔍 Verify Enterprise Pipeline') {
             steps {
                 script {
-                    echo "DynamoDB kayıtları kontrol ediliyor..."
-                    sh 'sleep 5'
+                    echo "SQS ve Lambda orkestrasyonu bekleniyor..."
+                    sh 'sleep 10' // Mesajın kuyruktan geçmesi için süre ver
+                    echo "Sonuçlar DynamoDB'den okunuyor:"
                     sh "aws --endpoint-url http://host.docker.internal:4566 dynamodb scan --table-name ImageMetadata"
+
+                    echo "SQS Kuyruk Durumu Kontrol Ediliyor:"
+                    sh "aws --endpoint-url http://host.docker.internal:4566 sqs get-queue-attributes --queue-url http://host.docker.internal:4566/000000000000/image-processing-queue --attribute-names All"
                 }
             }
         }
