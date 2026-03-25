@@ -32,11 +32,26 @@ pipeline {
             }
         }
 
+        stage('🧪 Automated Test') {
+    steps {
+        script {
+            echo "Testing S3 connectivity..."
+            // Jenkins içinden LocalStack S3'e dosya yükleme denemesi
+            // Not: Altyapıda kullandığımız 172.17.0.1 IP'sini burada da kullanıyoruz.
+            sh """
+                aws --endpoint-url=http://172.17.0.1:4566 s3 cp ../src/asd.jpg s3://user-images-bucket/test-check.jpg
+                aws --endpoint-url=http://172.17.0.1:4566 s3 ls s3://user-images-bucket/
+            """
+        }
+    }
+}
+
         stage('✅ Test Connection') {
             steps {
                 // Jenkins konteyneri içinden LocalStack'e erişim testi
                 // Docker Desktop sayesinde 'host.docker.internal' Mac'indeki LocalStack'i görür
                 sh 'aws --endpoint-url=http://host.docker.internal:4566 s3 ls'
+                sh 'aws --version || (apt-get update && apt-get install -y awscli)'
             }
         }
     }
