@@ -5,6 +5,8 @@ pipeline {
         AWS_ACCESS_KEY_ID     = 'test'
         AWS_SECRET_ACCESS_KEY = 'test'
         AWS_DEFAULT_REGION    = 'us-east-1'
+        TF_HTTP_RETRY_MAX     = '10'
+        TF_HTTP_TIMEOUT       = '300'
     }
 
     stages {
@@ -34,29 +36,31 @@ pipeline {
         stage('🧪 Automated Smoke Test') {
             steps {
                 script {
-                    echo "S3 Bağlantısı Test Ediliyor (host.docker.internal üzerinden)..."
+                    echo "S3 Bağlantısı Test Ediliyor..."
                     sh "aws --endpoint-url http://host.docker.internal:4566 s3 cp asd.jpg s3://user-images-bucket/test-check.jpg"
                     sh "aws --endpoint-url http://host.docker.internal:4566 s3 ls s3://user-images-bucket/"
                 }
             }
         }
+
         stage('🔍 Verify Database') {
             steps {
                 script {
                     echo "DynamoDB kayıtları kontrol ediliyor..."
-                    // Lambda'nın çalışması için 5 saniye bekle
                     sh 'sleep 5'
-                    // Kaydı sorgula
                     sh "aws --endpoint-url http://host.docker.internal:4566 dynamodb scan --table-name ImageMetadata"
                 }
             }
         }
-    }
-}
-post {
+    } // stages burada bitiyor
+
+    // POST bloğu BURADA, yani pipeline parantezinin içinde olmalı
+    post {
         always {
             echo "Pipeline tamamlandı, temizlik yapılabilir."
-            // İstersen buraya terraform destroy ekleyebiliriz ama
-            // şimdilik sonuçları görmen için manuel bırakalım.
+        }
+        success {
+            echo "✅ Harika! Tüm sistem doğrulandı."
         }
     }
+} // pipeline burada bitiyor
