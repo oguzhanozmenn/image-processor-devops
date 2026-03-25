@@ -40,5 +40,23 @@ pipeline {
                 }
             }
         }
+        stage('🔍 Verify Database') {
+            steps {
+                script {
+                    echo "DynamoDB kayıtları kontrol ediliyor..."
+                    // Lambda'nın çalışması için 5 saniye bekle
+                    sh 'sleep 5'
+                    // Kaydı sorgula
+                    sh "aws --endpoint-url http://host.docker.internal:4566 dynamodb scan --table-name ImageMetadata"
+                }
+            }
+        }
     }
 }
+post {
+        always {
+            echo "Pipeline tamamlandı, temizlik yapılabilir."
+            // İstersen buraya terraform destroy ekleyebiliriz ama
+            // şimdilik sonuçları görmen için manuel bırakalım.
+        }
+    }
